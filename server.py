@@ -1,19 +1,25 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
-import joblib
-import numpy as np
+import boto3
+import json
+import os
 
-# Load all components from the pickle file
-model_bundle = joblib.load("fraud_detection_pipeline.pkl")
-model = model_bundle["model"]
-columns = model_bundle["columns"]   # Fix: define this at the top
-# scaler and threshold can also be extracted if needed
-# scaler = model_bundle["scaler"]
-# threshold = model_bundle["threshold"]
+app = FastAPI(title="Fraud Detection via SageMaker")
 
-app = FastAPI(title="Fraud Detection API")
+# Read credentials and region from environment (Render will inject them)
+aws_access_key = os.environ["AWS_ACCESS_KEY_ID"]
+aws_secret_key = os.environ["AWS_SECRET_ACCESS_KEY"]
+region = os.environ.get("AWS_REGION", "us-east-1")
+endpoint_name = "fraud-detector-endpoint-v8"
 
-# Input schema
+# Boto3 client
+runtime_client = boto3.client(
+    "sagemaker-runtime",
+    region_name=region,
+    aws_access_key_id=aws_access_key,
+    aws_secret_access_key=aws_secret_key
+)
+
 class FraudInput(BaseModel):
     V1: float
     V2: float
@@ -47,24 +53,18 @@ class FraudInput(BaseModel):
 
 @app.post("/predict")
 def predict(data: FraudInput):
-    input_dict = data.dict()
+    payload = data.dict()
 
-    # Use correct column order from training
-    input_array = np.array([[input_dict[col] for col in columns]])
+    # Call SageMaker endpoint
+    response = runtime_client.invoke_endpoint(
+        EndpointName=endpoint_name,
+        ContentType="application/json",
+        Body=json.dumps(payload)
+    )
 
-    # Predict
-    prediction = model.predict(input_array)[0]
-    probability = model.predict_proba(input_array)[0].tolist()
+    result = json.loads(response["Body"].read().decode())
+    return result
 
-    return {
-        "prediction": int(prediction),
-        "probability": {
-            "non_fraud": probability[0],
-            "fraud": probability[1]
-        }
-    }
-    
 @app.get("/")
 def root():
-    return {"message": "Fraud Detection API is running"}
-
+    return {"message": "SageMaker-connected FastAPI is live ✅"}

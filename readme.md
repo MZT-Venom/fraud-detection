@@ -1,45 +1,63 @@
-## 🛠️ Manual: How to Run Your FastAPI Fraud Detection API
+## 📢 Note
+
+This project has a separate branch named **`local-model`** which contains code for making predictions using a **locally stored `.pkl` model file**.
+
+👉 Use that branch if you want to run predictions **without AWS SageMaker**.
+
+---
+
+## 🛠️ Manual: How to Run Your FastAPI Fraud Detection API (with AWS SageMaker)
 
 ### ✅ 1. **Project Structure**
 
-Assume your project folder looks like this:
+Your project folder should look like:
 
 ```
 Project/
-├── server.py                    # Your FastAPI app
-├── fraud_detection_pipeline.pkl # Your saved model
-└── sample_input.json            # Optional: for testing
+├── server.py              # Your FastAPI app that connects to SageMaker
+└── sample_input.json      # Optional: for testing
 ```
 
-------
+> ✅ No need for local `.pkl` files — the model is hosted and served via Amazon SageMaker.
+
+---
 
 ### ✅ 2. **Install Dependencies**
 
-Make sure you have Python installed (e.g., Python 3.9 or above).
- Then, install required libraries:
+Make sure you have Python installed (e.g., Python 3.9 or above).  
+Then, install required libraries:
 
 ```bash
-pip install fastapi uvicorn joblib xgboost scikit-learn numpy pydantic
+pip install fastapi uvicorn boto3 sagemaker pydantic
 ```
 
-------
+---
 
 ### ✅ 3. **Contents of `server.py`**
 
-Paste this code inside `server.py`:
+Replace your existing `server.py` with this:
 
 ```python
 from fastapi import FastAPI
 from pydantic import BaseModel
-import joblib
-import numpy as np
+import boto3
+import json
 
-# Load your model and metadata
-model_bundle = joblib.load("fraud_detection_pipeline.pkl")
-model = model_bundle["model"]
-columns = model_bundle["columns"]
+from sagemaker.predictor import Predictor
+from sagemaker.serializers import JSONSerializer
+from sagemaker.deserializers import JSONDeserializer
 
-app = FastAPI(title="Fraud Detection API")
+# SageMaker endpoint name
+ENDPOINT_NAME = "fraud-detector-endpoint-v8"  # Change this if your endpoint has a different name
+
+# Set up SageMaker predictor
+predictor = Predictor(
+    endpoint_name=ENDPOINT_NAME,
+    serializer=JSONSerializer(),
+    deserializer=JSONDeserializer()
+)
+
+app = FastAPI(title="Fraud Detection API (via SageMaker)")
 
 class FraudInput(BaseModel):
     V1: float
@@ -74,50 +92,42 @@ class FraudInput(BaseModel):
 
 @app.post("/predict")
 def predict(data: FraudInput):
-    input_dict = data.dict()
-    input_array = np.array([[input_dict[col] for col in columns]])
-    prediction = model.predict(input_array)[0]
-    probability = model.predict_proba(input_array)[0].tolist()
+    input_data = data.dict()
+    response = predictor.predict(input_data)
+    return response
 
-    return {
-        "prediction": int(prediction),
-        "probability": {
-            "non_fraud": probability[0],
-            "fraud": probability[1]
-        }
-    }
+@app.get("/")
+def root():
+    return {"message": "Fraud Detection API (via SageMaker) is running"}
 ```
 
-------
+---
 
 ### ✅ 4. **Run the Server**
 
-Open terminal in your project directory and run:
+Open your terminal and run:
 
 ```bash
 uvicorn server:app --reload
 ```
 
-Expected output:
-
-```
-Uvicorn running on http://127.0.0.1:8000
-```
-
-------
+---
 
 ### ✅ 5. **Test the API**
 
-Open your browser and go to:
+Go to:
 
-📍 `http://127.0.0.1:8000/docs`
- This opens the **Swagger UI**, where you can test your API.
+```
+http://127.0.0.1:8000/docs
+```
 
-------
+This opens the **Swagger UI**, where you can test the `/predict` endpoint interactively.
+
+---
 
 ### ✅ 6. **Send Sample Input**
 
-Use this sample JSON:
+Use this sample JSON input to test the API:
 
 ```json
 {
@@ -153,7 +163,7 @@ Use this sample JSON:
 }
 ```
 
-------
+---
 
 ### ✅ 7. **Example Output**
 
@@ -167,5 +177,4 @@ Use this sample JSON:
 }
 ```
 
-------
-
+---
