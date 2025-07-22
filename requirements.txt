@@ -1,7 +1,9 @@
 scikit-learn
 fastapi
+boto3
 uvicorn
 xgboost
 numpy
 joblib
+json
 pydantic
