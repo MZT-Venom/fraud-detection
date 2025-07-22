@@ -5,5 +5,4 @@ uvicorn
 xgboost
 numpy
 joblib
-json
 pydantic
