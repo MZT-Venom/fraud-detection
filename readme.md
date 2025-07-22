@@ -1,3 +1,11 @@
+## 📢 Note
+
+This project has a separate branch named **`local-model`** which contains code for making predictions using a **locally stored `.pkl` model file**.
+
+👉 Use that branch if you want to run predictions **without AWS SageMaker**.
+
+---
+
 ## 🛠️ Manual: How to Run Your FastAPI Fraud Detection API (with AWS SageMaker)
 
 ### ✅ 1. **Project Structure**
